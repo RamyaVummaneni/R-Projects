@@ -1,0 +1,289 @@
+---
+title: "Analysis on completejourney dataset"
+author: "RamyaVummaneni"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+## Project Components {.tabset}
+
+
+### Introduction
+
+
+<ol>
+<li>**Problem Statement:**</li>
+
+The objective of this project is to discover the Regork sales trend, to analyse the product category contributing to the least sales value and developing a plan to enhance those Product sales. Through our analysis, 'Toys' as a product category make the least sales and we shall discover an approach to boost the Toy sales by understanding the related trends of Married and Unmarried couples with at least 1 kid, who are the popular customers for Toys, and discover the purchasing behavior of this group and their likelihood to discover products as per the location of the aisles and the placement of Toys with their sought-after products.
+
+
+<hr/>
+
+<li>**Solution Overview:**</li>
+
+I have combined the transactions, products, demographics and promotions data set of Regork to discover and make the analysis to promote *Toys* sales. The Analytic methodology to address the problem involved the following steps:
+<ul>
+<li>Importing the packages crucial for performing the discovery and analysis</li>
+<li>Perform the data cleaning by removing the unwanted and missing values using the analysis tools provided in the package</li>
+<li>Perform the required joins between the data sets to extract the relevant information to target and build the analysis on</li>
+<li>Employing graphs to get the better picture and derive conclusions and next steps</li>
+<li>Univariate and multivariate exploration of the data helped me answer some of the questions and areas I wanted to focus on</li>
+
+</ul>
+
+<hr/>
+
+<li>**Insights:**</li> 
+
+<ul>
+<li>By exploring the data sets and focusing on the product categories by the sales value, I discovered that *Toys* are making the least sales</li>
+<li>Considering the target customers for Toys, Married and Unmarried couples with kids focused on products such as *Infant Formulas*, *Coupons/Miscellaneous Items*, *Home furnishings*, *Party Trays*</li>
+<li>Placing *Toys* with the popular products can help grow the sales of Toys as they will be better likely be picked at those aisles</li>
+</ul>
+
+</ol>
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+```
+
+
+### Importing Libraries
+
+**Following Packages were used:**
+
+<ul>
+
+<li>Tidyverse: Used for visualizing, transforming, tidying and joining data</li>
+<li>Completejourney: Data set I have worked on</li>
+<li>Dplyr: Used for data manipulation. Provides the arrange, summarize etc functions</li>
+<li>Lubridate: Used for making it easier to work with dates and times</li>
+<li>Ggplot2: Used to plot charts</li>
+<li>Magittr: Provides the pipe operator and improves the readability of code and makes it more efficient</li>
+<li>Ggridges: Provides two main geoms</li>
+<li>Ggtext: Provides an improved text rendering support for ggplot</li>
+<li>Plotly: Employs the use of interactive plots</li>
+<li>Ggrepel: Used for providing geoms to repel overlapping text labels</li>
+
+
+</ul>
+
+```{r results='hide', message=FALSE, warning=FALSE}
+## Load Required Packages ##
+library(tidyverse) ## Tidying data
+library(completejourney) ## Dataset
+library(dplyr) ## Manipulating data
+library(lubridate)## date time manipulation
+library(ggplot2)## Visualising data
+library(magrittr) ## Pipe operators
+library(here)
+library(ggridges)##provides two main geoms 
+library(ggtext)##improved text rendering support for ggplot
+library(plotly)##interactive plots
+library(ggrepel)#providing geoms to repel overlapping text labels
+```
+
+
+### Data Preparation
+
+
+Prepare the data by making it more uniform and replacing the unwanted/NA values in each relevant data set
+
+```{r}
+## Loading data
+
+products 
+demographics 
+transactions <- get_transactions()
+promotions <- get_promotions()
+
+### Checking for missing values and replacing the unwanted values, na.
+
+## Check for products data
+colSums(is.na(products))
+
+products$product_category <- products$product_category %>% replace_na("Unknown")
+products$product_type <- products$product_type %>% replace_na("Unknown")
+products$package_size <- products$package_size %>% replace_na("0 OZ")
+
+## Check for demographics data
+colSums(is.na(demographics))
+
+demographics$marital_status <- demographics$marital_status %>% replace_na("Unknown")
+demographics$home_ownership <- demographics$home_ownership %>% replace_na("Unknown")
+
+## Check for transactions data
+colSums(is.na(transactions))
+
+## Check for promotions data
+colSums(is.na(promotions))
+
+
+
+```
+
+
+
+### Exploratory Data Analysis
+
+This step helps in exploring the target area at Regork that I want to focus on. The following code helps us to evaluate the variables in the source data sets.
+
+**I discovered the product category which is having the least sales value, here Toys with sales value = 4.17 comprises the least sales.**
+ 
+```{r leastsales}
+
+## Finding income group which contributes to highest sales
+
+transactions %>%
+  inner_join(products, by = "product_id") %>%
+  group_by(product_category) %>%
+  summarise(total_sales = sum(sales_value)) %>%
+  arrange(total_sales) %>%
+  head() %>%
+  ggplot( aes(x = product_category, y = total_sales)) +
+  scale_fill_manual(values = c("#66B2FF", "#a1d99b")) +
+  geom_point(aes(color = total_sales)) +
+  geom_label_repel(aes(label = total_sales)) +
+  scale_x_discrete(guide = guide_axis(angle = 90)) +
+  scale_y_continuous(labels = scales::dollar)  +
+  labs(title = "Least Number of Total Sales",
+       subtitle = "Household transaction data covering 2016-2018.",
+       x = "Product Category",
+       y = "Total sales by product category ($)",
+       caption = "The product categories where the company is making less sales. Toys category is making the least sales",
+       tag = "Fig.1") +
+  theme(plot.tag.position = "bottomright")
+
+```
+**Below, I compared the households with kids to understand their purchasing behavior**
+
+```{r hosuehold_with_kids}
+Households_Kids <- transactions %>%
+  mutate(month = month(transaction_timestamp)) %>%
+  inner_join(products, by = "product_id") %>%
+  inner_join(demographics, by = "household_id") %>%
+  mutate(marital_status = ifelse(marital_status == "Married", "Married", "Unmarried")) %>%
+  filter(marital_status %in% c("Married", "Unmarried")) %>%
+  filter(kids_count >= 1) %>%
+  group_by(marital_status, product_category) %>%
+  summarize(total_sales = sum(sales_value, na.rm = TRUE) / n_distinct(basket_id)) %>%
+  arrange(desc(total_sales)) %>%
+  top_n(n = 10) %>%
+  ggplot(aes(product_category, total_sales, fill = marital_status)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip() +
+  scale_fill_manual(values = c("#66B2FF", "#CCCCFF")) +
+  theme(panel.background = element_rect(fill = "white", colour = "grey50")) +
+  theme(
+    plot.title.position = "plot",
+    plot.caption.position = "plot",
+    plot.title = element_text(hjust = 0.5),
+    plot.subtitle = element_text(size = 11, margin = margin(b = 25, l = -25)),
+    plot.caption = element_markdown()
+  ) +
+  labs(
+    title = "Top 10 total Sales in married and unmarried households with kids",
+    subtitle   = "Comparing the total sales of top product categories between married and unmarried households with kids.",
+    x = "Product Category",
+    y = "Total Sales ($) by each product_category",
+    tag = "Fig.2"
+  ) +
+  theme(plot.tag.position = "bottomright")
+
+ggplotly(Households_Kids)
+
+```
+
+**Then I understood the order and placement of the products that Households Married and Unmarried couples with kids which will most likely visit for their popular products**
+
+```{r tables }
+
+married_households_product_cat <- transactions %>%
+  mutate(month = month(transaction_timestamp)) %>%
+  inner_join(products, by = "product_id") %>%
+  inner_join(demographics, by = "household_id") %>%
+  mutate(marital_status = ifelse(marital_status == "Married", "Married", "Unmarried")) %>%
+  filter(marital_status %in% c("Married", "Unmarried")) %>%
+  filter(kids_count >= 1) %>%
+  group_by(marital_status, product_category) %>%
+  summarize(total_sales = sum(sales_value, na.rm = TRUE) / n_distinct(basket_id)) %>%
+  arrange(desc(total_sales)) %>%
+  top_n(n = 10) %>%
+  select(product_category)
+
+rmarkdown::paged_table(married_households_product_cat)
+
+
+
+```
+
+**The analysis below will help to decode the trend of this consumer group so we can develop a strategy for the placement of Toys along with the top products of this group to foster the sales of Toys as it can be most likely picked up around specific related items and aisles below**
+
+```{r tables2}
+display_locations <- transactions %>%
+  inner_join(products, by = "product_id") %>%
+  inner_join(promotions, by = c('product_id', 'store_id')) %>%
+  semi_join(married_households_product_cat, by = "product_category") %>%
+  group_by(store_id, product_category, display_location) %>%
+  filter(display_location %in% c("A", 1, 2, 4)) %>%
+  group_by(store_id, product_category, display_location) %>%
+  summarize(total_quantity_sold = sum(sales_value)) %>%
+  mutate(
+    display_location = fct_recode(
+      display_location,
+      "In Shelf" = "A",
+      "Store Front" = "1",
+      "Store Rear" = "2",
+      "Mid Aisle" = "4"
+    )
+  ) %>%
+  arrange(desc(total_quantity_sold))
+
+rmarkdown::paged_table(display_locations)
+```
+
+**This graph helps to visualize the products Regork can target on to consider the placement of Toys around to boost Toys sales** 
+
+
+```{r piechart}
+count <- display_locations %>%
+  group_by(product_category) %>%
+  summarize(Count = n()) %>%
+  ggplot(aes(product_category, Count)) +
+  scale_x_discrete(guide = guide_axis(angle = 45))+
+  geom_bar(
+    stat = "identity",
+    fill = "dodgerblue",
+    color = "grey40",
+    alpha = .5
+  ) +
+  theme(
+    plot.title.position = "plot",
+    plot.caption.position = "plot",
+    plot.title = element_text(margin = margin(b = 25, l = -25)),
+    plot.subtitle = element_text(hjust = 1)
+  ) +
+  labs(
+    fill = "product_category",
+    x = NULL,
+    y = NULL,
+    title = "Bar chart tells us the top categories that sell among households with kids",
+    tag = "Fig.3"
+  ) +
+  theme(plot.tag.position = "bottomright")
+
+count
+
+```
+
+
+
+### Summary
+
+By using the transactions and product data,I found the product category that makes the lowest sales. The category causing the <b>lowest sales is the Toys category </b>, which is visible from the graph accompanying the write-up. Irrespective of the store location, the toys product category is the least-selling product category filtered out from all the other existing product categories. This category needs more attention to Increase the sales of toys and Increase the overall revenues of the store, irrespective of the store’s locations.
+
+I have filtered out households with at least one kid or more than one kid. I propose that Toys-which was the least-selling product category should be placed near the high-selling categories among these households like <b>Infant formula, Party trays and Home Furnishings </b> so that the families when they visit the stores to buy their usual products come across the toys placed nearby and have thought of purchasing them. This eventually leads to the sales increase, and the toy business becomes profitable.
+
+Also, I suggest that some <b>coupons</b> related to toys be given to customers so that when customers come to purchase their products next time, they recall the coupons associated with toys offered in the previous transactions. This would incentivise the customers to redeem the coupons. 
